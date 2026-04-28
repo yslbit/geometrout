@@ -23,7 +23,7 @@ def transform(pc, transformation_matrix, in_place=True):
         This should have shape N x [3 + M] where N is the number of points
         are some additional mask dimensions or whatever, but the 3 are x-y-z
     :param transformation_matrix: A 4x4 homography
-    :param in_place: A flag which says whether to do this in place
+    :param in_place: A flag which says whether to do this in place, if False, a new pointcloud will be returned, otherwise the input will be modified and returned
     :return: A pointcloud that has been transformed,
         either the same as the input or a new one.
     """

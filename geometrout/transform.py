@@ -10,6 +10,7 @@ def _quaternion_trace_method(matrix, rtol=1e-7, atol=1e-7):
     which is itself based on the method described here:
     http://www.euclideanspace.com/maths/geometry/rotations/conversions/matrixToQuaternion/
     Altered to work with the column vector convention instead of row vectors
+    return: A quaternion in wxyz format
     """
     assert matrix.shape == (3, 3)
     if not np.allclose(
@@ -52,6 +53,9 @@ def _quaternion_trace_method(matrix, rtol=1e-7, atol=1e-7):
 
 @nb.jit(nopython=True, cache=True)
 def _random_rotation():
+    '''
+    Generate a random rotation quaternion (xyzw) with uniform distribution.
+    '''
     r1, r2, r3 = np.random.random(3)
     return np.array(
         [
@@ -132,6 +136,9 @@ def _quaternion_from_rpy(r, p, y):
 
 @nb.jit(nopython=True, cache=True)
 def _quaternion_from_axis_angle(axis, angle):
+    '''
+    return: A quaternion in wxyz format
+    '''
     mag = np.linalg.norm(axis)
     if mag == 0.0:
         raise ZeroDivisionError("Provided rotation axis has no length")
@@ -162,7 +169,7 @@ def _rotation_multiply(q1, q2):
 def _quaternion_inverse(q):
     qinv = np.copy(q)
     qinv[1:] *= -1
-    return qinv
+    return qinv / np.dot(q, q)
 
 
 @nb.jit(nopython=True, cache=True)
@@ -202,7 +209,7 @@ class SO3:
 
     def __init__(self, quaternion: np.ndarray):
         """
-        :param quaternion: np.ndarray
+        :param quaternion: np.ndarray wxyz format
         """
         assert quaternion.shape == (4,)
         self.q = _normalize(quaternion)
@@ -314,6 +321,11 @@ class SO3:
         """
         return _quaternion_to_matrix(self.q)
 
+    @property
+    def rotation_matrix(self):
+        """Backward-compat alias for matrix."""
+        return _quaternion_to_matrix(self.q)
+
 
 @nb.jit(nopython=True, cache=True)
 def _pose_multiply(pos1, q1, pos2, q2):
@@ -336,10 +348,17 @@ class SE3:
 
     so3: SO3
 
-    def __init__(self, pos: np.ndarray, quaternion: np.ndarray):
+    def __init__(self, pos=None, quaternion=None, *, xyz=None, so3=None):
+        # Backward-compat: accept xyz= and so3= keyword arguments
+        if xyz is not None:
+            pos = xyz
+        pos = np.asarray(pos, dtype=np.double)
         assert pos.shape == (3,)
         self.pos = pos
-        self.so3 = SO3(quaternion)
+        if so3 is not None:
+            self.so3 = so3
+        else:
+            self.so3 = SO3(np.asarray(quaternion, dtype=np.double))
 
     def __mul__(self, other):
         """
@@ -375,10 +394,23 @@ class SE3:
     @property
     def xyz(self):
         """
-        :return: The translation vector
+        :return: The translation vector as a numpy array
         """
-        x, y, z = self.pos
-        return [x, y, z]
+        return self.pos
+
+    @property
+    def _xyz(self):
+        """Backward-compat alias: mutable numpy array view of pos."""
+        return self.pos
+
+    @property
+    def _so3(self):
+        """Backward-compat alias for self.so3."""
+        return self.so3
+
+    @_so3.setter
+    def _so3(self, value):
+        self.so3 = value
 
     @staticmethod
     def from_matrix(matrix, rtol=1e-7, atol=1e-7):

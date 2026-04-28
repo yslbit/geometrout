@@ -106,8 +106,18 @@ class Cuboid:
         # Note that the input type of these is arrays but I'm still casting.
         # This is because its easier to just case to numpy arrays than it is to
         # check for type
-        self.pose = SE3(center.astype(np.double), quaternion.astype(np.double))
-        self.dims = dims.astype(np.double)
+        self.pose = SE3(np.asarray(center, dtype=np.double), np.asarray(quaternion, dtype=np.double))
+        self.dims = np.asarray(dims, dtype=np.double)
+
+    @property
+    def _pose(self):
+        """Backward-compat alias for self.pose."""
+        return self.pose
+
+    @property
+    def _dims(self):
+        """Backward-compat alias for self.dims (mutable numpy array)."""
+        return self.dims
 
     def copy(self):
         return Cuboid(
@@ -159,20 +169,21 @@ class Cuboid:
         center_range=np.array([[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]),
         dimension_range=np.array([[1.0, 1.0, 1.0], [1.0, 1.0, 1.0]]),
         random_orientation=True,
+        quaternion=None,
     ):
         """
-        Creates a random cuboid within the given ranges
-        :param center_range: If given, represents the uniform range from which to draw a center.
-            Should be np.array with dimension 2x3. First row is lower limit, second row is upper limit
-            If nothing is passed, center will always be at [0, 0, 0]
-        :param dimension_range: If given, represents the uniform range from which to draw a center.
-            Should be np.array with dimension 2x3. First row is lower limit, second row is upper limit
-            If nothing is passed, dimensions defaults to [1, 1, 1]
-        :param quaternion: If True, will give a random orientation to cuboid.
-            If False, will be set as the identity
-            Default is True
-        :return: Cuboid object drawn from specified uniform distribution
+        Creates a random cuboid within the given ranges.
+        :param center_range: 2x3 array/list with [[low], [high]].  None → origin.
+        :param dimension_range: 2x3 array/list with [[low], [high]].
+        :param random_orientation: bool, random quaternion when True.
+        :param quaternion: Backward-compat alias for random_orientation (bool).
         """
+        if quaternion is not None:
+            random_orientation = bool(quaternion)
+        if center_range is None:
+            center_range = np.zeros((2, 3))
+        center_range = np.asarray(center_range, dtype=np.double)
+        dimension_range = np.asarray(dimension_range, dtype=np.double)
         center = (center_range[1, :] - center_range[0, :]) * np.random.rand(
             3
         ) + center_range[0, :]
@@ -180,10 +191,10 @@ class Cuboid:
             3
         ) + dimension_range[0, :]
         if random_orientation:
-            quaternion = _random_rotation()
+            q = _random_rotation()
         else:
-            quaternion = np.array([1.0, 0.0, 0.0, 0.0])
-        return cls(center, dims, quaternion)
+            q = np.array([1.0, 0.0, 0.0, 0.0])
+        return cls(center, dims, q)
 
     def is_zero_volume(self, atol=1e-7):
         for x in self.dims:
@@ -222,9 +233,13 @@ class Cuboid:
     @property
     def center(self):
         """
-        :return: The center of the object as a list
+        :return: The center of the object as a mutable numpy array
         """
         return self.pose.pos
+
+    @center.setter
+    def center(self, value):
+        self.pose.pos = np.asarray(value, dtype=np.double)
 
     @property
     def quaternion(self):
@@ -251,7 +266,7 @@ class Cylinder:
 
     def __init__(self, center, radius, height, quaternion):
         assert radius >= 0 and height >= 0
-        self.pose = SE3(center.astype(np.double), quaternion.astype(np.double))
+        self.pose = SE3(np.asarray(center, dtype=np.double), np.asarray(quaternion, dtype=np.double))
         self.radius = radius
         self.height = height
 
@@ -275,9 +290,13 @@ class Cylinder:
     @property
     def center(self):
         """
-        :return: The center of the object as a list
+        :return: The center of the object as a mutable numpy array
         """
         return self.pose.pos
+
+    @center.setter
+    def center(self, value):
+        self.pose.pos = np.asarray(value, dtype=np.double)
 
     @classmethod
     def random(
@@ -286,18 +305,21 @@ class Cylinder:
         radius_range=np.array([1.0, 1.0]),
         height_range=np.array([1.0, 1.0]),
         random_orientation=True,
+        quaternion=None,
     ):
         """
         Creates a random Cylinder.
-        :param center_range: 2x3 numpy array or list with form
-          [[x_low, y_low, z_low], [x_high, y_hight, x_max]].
-          If nothing is passed, center will always be at [0, 0, 0]
-        :param radius_range: List [r_low, r_high]. Pass in None for
-          If nothing is passed, radius will be 1.0
-        :param height_range: List [h_low, h_high]. Pass in None for
-          If nothing is passed, height will be 1.0
-        :param random_orientation: bool Whether to have a random orientation
+        :param center_range: 2x3 array/list, or None for origin.
+        :param radius_range: [r_low, r_high]
+        :param height_range: [h_low, h_high]
+        :param random_orientation: bool
+        :param quaternion: Backward-compat alias for random_orientation (bool).
         """
+        if quaternion is not None:
+            random_orientation = bool(quaternion)
+        if center_range is None:
+            center_range = np.zeros((2, 3))
+        center_range = np.asarray(center_range, dtype=np.double)
         center = (center_range[1, :] - center_range[0, :]) * np.random.rand(
             3
         ) + center_range[0, :]
@@ -306,10 +328,10 @@ class Cylinder:
         mn, mx = height_range
         height = (mx - mn) * np.random.rand() + mn
         if random_orientation:
-            quaternion = _random_rotation()
+            q = _random_rotation()
         else:
-            quaternion = np.array([1.0, 0.0, 0.0, 0.0])
-        return cls(center, radius, height, quaternion)
+            q = np.array([1.0, 0.0, 0.0, 0.0])
+        return cls(center, radius, height, q)
 
     @property
     def surface_area(self):
